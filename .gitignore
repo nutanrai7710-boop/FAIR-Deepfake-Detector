@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+env/
+*.egg-info/
+
+# Large model/cache files - too big for GitHub free tier
+*.pth
+*.pt
+*.bin
+*.ckpt
+.cache/
+UniversalFakeDetect/data/
+UniversalFakeDetect/datasets/
+UniversalFakeDetect/results/
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Temp / logs
+*.tmp
+*.log
+bob-task-outputs/

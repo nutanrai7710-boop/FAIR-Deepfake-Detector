@@ -1,0 +1,407 @@
+======================================================================
+  FAIR - Forensic AI Image Reviewer
+  Technology Stack and Implementation Reference
+  MSc Cybersecurity Competition Prototype
+======================================================================
+
+
+1. OVERVIEW
+----------------------------------------------------------------------
+FAIR (Forensic AI Image Reviewer) is an explainable deepfake detection
+and AI security platform built for image forensics research and
+education. It integrates a pretrained AI detector with independent
+forensic signal analysis, presenting each result separately with
+honest, plain-language explanations and a downloadable forensic report.
+
+The platform is built entirely from open-source, locally-executed
+tools. No image data is sent to any external service.
+
+
+2. ARCHITECTURE SUMMARY
+----------------------------------------------------------------------
+The system processes each uploaded image through four independent
+forensic lanes:
+
+  Image Upload
+       |
+       v
+  Input Validation + Metadata Extraction + SHA-256 Digest
+       |
+       v
+  Parallel Analysis:
+    [A] UnivFD AI Detector
+    [B] ELA Visualization
+    [C] High-Frequency Residual
+       |
+       v
+  Evidence Summary + Limitations
+       |
+       v
+  Downloadable Forensic Report (JSON + TXT)
+
+Each forensic lane is independent. If the AI detector fails or is
+unavailable, ELA, high-frequency analysis, and report generation all
+continue to work normally. Results from different lanes are NEVER
+combined into a single "fake probability" without validated calibration.
+
+
+3. PROGRAMMING LANGUAGE - PYTHON 3.9+
+----------------------------------------------------------------------
+Python is the core language for the entire project. It was chosen for
+its dominant position in AI/ML research, its rich ecosystem of image
+processing and deep learning libraries, and its beginner-accessible
+syntax.
+
+Python 3.9 or higher is required to support the union type syntax used
+in type hints (e.g. str | None).
+
+Role in FAIR:
+  All application logic, forensic analysis, AI inference, report
+  generation, and the web interface are written in Python.
+
+
+4. WEB INTERFACE - STREAMLIT
+----------------------------------------------------------------------
+Streamlit is an open-source Python framework for building data and AI
+web applications without writing HTML, CSS, or JavaScript. It converts
+Python scripts into interactive browser-based UIs by treating each UI
+element as a function call (e.g. st.image(), st.download_button()).
+The app runs as a local web server on port 8501.
+
+  Version : streamlit >= 1.28.0
+  Website : https://streamlit.io
+
+Role in FAIR:
+  Provides the entire user interface including file upload, image
+  display, side-by-side forensic visualizations, evidence summary
+  table, download buttons, and expandable information panels. Custom
+  CSS injected via st.markdown() applies the dark cybersecurity theme.
+
+
+5. IMAGE PROCESSING - PILLOW (PIL)
+----------------------------------------------------------------------
+Pillow is the standard Python image processing library, maintained as
+a fork of the original Python Imaging Library. It handles opening,
+converting, resizing, and saving images across formats including JPEG,
+PNG, BMP, TIFF, and WebP. It also provides access to embedded EXIF
+metadata.
+
+  Version : pillow >= 9.0.0
+  Website : https://pillow.readthedocs.io
+
+Role in FAIR:
+  Used for all core image operations including opening uploaded files,
+  converting colour modes (e.g. RGBA to RGB), reading dimensions and
+  format metadata, extracting EXIF data, performing JPEG recompression
+  for ELA, and converting NumPy arrays back to displayable images.
+
+
+6. COMPUTER VISION - OPENCV
+----------------------------------------------------------------------
+OpenCV (Open Source Computer Vision Library) is the world's largest
+and most widely used computer vision library, originally developed by
+Intel. It provides highly optimised implementations of image processing
+algorithms including filters, transformations, and feature detectors.
+The Python package opencv-python wraps the C++ library.
+
+  Version : opencv-python >= 4.7.0
+  Website : https://opencv.org
+
+Role in FAIR:
+  Used for the Gaussian high-pass filter in the high-frequency residual
+  analysis. cv2.GaussianBlur() applies a Gaussian low-pass filter to
+  the grayscale image; subtracting this from the original isolates
+  high-frequency components such as fine edges, textures, and noise.
+
+
+7. NUMERICAL COMPUTING - NUMPY
+----------------------------------------------------------------------
+NumPy is the fundamental package for numerical computing in Python. It
+provides the ndarray data structure (an efficient multi-dimensional
+array) along with a comprehensive set of mathematical functions.
+Virtually all scientific Python libraries use NumPy arrays as their
+common data exchange format.
+
+  Version : numpy >= 1.23.0
+  Website : https://numpy.org
+
+Role in FAIR:
+  Used in both forensic analysis modules. In ELA, NumPy computes the
+  absolute pixel difference between the original and recompressed
+  images using np.abs and np.clip. In high-frequency analysis, it
+  handles the float32 subtraction and neutral-level shift. Descriptive
+  statistics (np.mean, np.max, np.std) are computed for the report.
+
+
+8. FILE INTEGRITY - HASHLIB (PYTHON STANDARD LIBRARY)
+----------------------------------------------------------------------
+hashlib is part of Python's standard library and requires no
+installation. It provides implementations of secure hash functions
+including SHA-1, SHA-256, SHA-512, and MD5. SHA-256 (Secure Hash
+Algorithm 256-bit) produces a 64-character hexadecimal digest that
+uniquely identifies the binary content of any file.
+
+  Version : included in Python stdlib (no install needed)
+
+Role in FAIR:
+  Computes the SHA-256 digest of the raw bytes of the uploaded image
+  file. This digest is included in the forensic report and allows a
+  future analyst to verify they are examining the exact same file.
+
+  LIMITATION: SHA-256 confirms file identity, NOT content
+  authenticity. A convincing deepfake has a perfectly stable hash.
+
+
+9. AI DETECTOR - UNIVERSALFAKEDETECT (UnivFD)
+----------------------------------------------------------------------
+UniversalFakeDetect (UnivFD) is a pretrained AI model published at
+CVPR 2023 by Ojha, Li, and Lee. It uses a pretrained CLIP ViT-L/14
+vision encoder to extract 768-dimensional image features, then passes
+them through a trained linear classifier to produce a real/synthetic
+logit score. It was trained primarily on GAN-generated images and
+evaluated on both GAN and diffusion model outputs.
+
+  Repository : https://github.com/Yuheng-Li/UniversalFakeDetect
+  Paper      : Ojha et al. (CVPR 2023)
+               "Towards Universal Fake Image Detectors that Generalize
+               Across Generative Models"
+  Checkpoint : pretrained_weights/fc_weights.pth
+               Shape: weight[1, 768] + bias[1] (float32)
+
+Role in FAIR:
+  Provides the primary AI-based forensic signal. The model runs
+  locally on CPU. Raw logit > 0 indicates synthetic; < 0 indicates
+  real. Values near 0 are flagged as inconclusive. The raw logit is
+  NEVER presented as a calibrated probability.
+
+  LIMITATION: Primarily targets fully AI-generated images. May not
+  reliably detect face swaps, photograph retouching, or novel
+  generation methods outside its training distribution.
+
+
+10. VISION-LANGUAGE BACKBONE - OPENAI CLIP
+----------------------------------------------------------------------
+CLIP (Contrastive Language-Image Pretraining) is a neural network
+trained by OpenAI on 400 million image-text pairs. It learns rich
+visual representations by predicting which text captions match which
+images. The ViT-L/14 variant uses a Vision Transformer with patch
+size 14px, producing 768-dimensional feature vectors.
+
+  Package : openai-clip 1.0.1
+  Paper   : Radford et al. (ICML 2021)
+            "Learning Transferable Visual Models From Natural
+            Language Supervision"
+  Model   : ViT-L/14 (~890 MB, downloaded on first use)
+
+Role in FAIR:
+  Serves as the feature extraction backbone for UnivFD. CLIP encodes
+  the input image into a 768-dim vector; UnivFD's linear classifier
+  maps this to a real/synthetic score. CLIP itself is NOT fine-tuned;
+  only the linear classification head is trained.
+
+
+11. DEEP LEARNING FRAMEWORK - PYTORCH
+----------------------------------------------------------------------
+PyTorch is an open-source deep learning framework developed by Meta
+AI. It provides automatic differentiation (autograd), GPU/CPU tensor
+operations, and a comprehensive ecosystem for building, training, and
+deploying neural network models. It is the most widely used framework
+in academic AI research.
+
+  Version : torch 2.14.1+cpu (CPU build, no CUDA required)
+  Website : https://pytorch.org
+
+Role in FAIR:
+  Required by both CLIP and the UnivFD linear classifier. Used for
+  model loading (torch.load with weights_only=False), inference
+  (torch.no_grad context manager), tensor operations, and the linear
+  layer (torch.nn.Linear). The CPU build is used so no GPU or CUDA
+  setup is required for the demo.
+
+
+12. REPORTING - PYTHON STANDARD LIBRARY (json, uuid, datetime)
+----------------------------------------------------------------------
+Three modules from Python's standard library handle report generation:
+
+  json     : Serialises the complete analysis result dictionary into a
+             formatted, human-readable JSON file. JSON was chosen
+             because it is machine-readable, versioned, and can be
+             ingested by downstream tools or databases.
+
+  uuid     : Generates a UUID4 (random universally unique identifier)
+             for each analysis session. This analysis ID is embedded
+             in both the JSON and TXT reports, making each analysis
+             uniquely traceable and reproducible.
+
+  datetime : Stamps each report with an ISO 8601 UTC timestamp
+             (e.g. 2024-05-01T14:32:00+00:00). Using UTC avoids
+             timezone ambiguity in forensic records.
+
+  All three are part of the Python standard library. No installation
+  is required.
+
+
+13. FORENSIC METHODS IMPLEMENTED
+----------------------------------------------------------------------
+
+  13.1 Error Level Analysis (ELA)
+  --------------------------------
+  ELA is a digital image forensics technique introduced by Neal
+  Krawetz (2007). It works by re-saving the image as a JPEG at a
+  known quality level (quality=90) and computing the absolute
+  pixel-wise difference between the original and the recompressed
+  version. Regions that have been edited and re-saved at a different
+  quality level tend to show different error levels than undisturbed
+  regions. The differences are amplified (x15) for visibility.
+
+  Implementation: Pillow for JPEG recompression, NumPy for difference
+  computation (np.abs, np.clip).
+
+  LIMITATION: ELA is NOT proof of manipulation. The same visual
+  patterns appear from multiple compression rounds, format
+  conversions, and high-detail natural image content (eyes, hair,
+  sharp edges, text).
+
+  13.2 High-Frequency Residual Analysis
+  ---------------------------------------
+  A Gaussian high-pass filter isolates fine textures, edges, and
+  noise from the low-frequency content of an image. Process:
+    (1) Convert image to grayscale
+    (2) Apply Gaussian blur (sigma=2) to create low-pass version
+    (3) Subtract blurred version from original
+    (4) Shift result to [0,255] for display (128 = zero residual)
+
+  AI-generated images sometimes show unusual patterns in this
+  residual: tiling artefacts, unnaturally smooth regions, or spectral
+  anomalies from GAN upsampling.
+
+  Implementation: OpenCV cv2.GaussianBlur, NumPy float32 arithmetic.
+
+  LIMITATION: Strong high-frequency signals also appear in natural
+  photographs with fine detail. This is an exploratory forensic aid,
+  NOT a classifier.
+
+  13.3 SHA-256 File Integrity Digest
+  ------------------------------------
+  A SHA-256 cryptographic hash of the raw file bytes is computed. The
+  resulting 64-character hex string uniquely identifies the exact
+  binary content of the file. If any single byte changes, the hash
+  changes completely (avalanche effect).
+
+  Implementation: Python hashlib.sha256()
+
+  LIMITATION: SHA-256 confirms file identity, NOT content
+  authenticity. A convincing deepfake has a stable, consistent hash.
+
+
+14. TECHNOLOGY STACK SUMMARY
+----------------------------------------------------------------------
+
+  Technology         Version          Category           Role
+  -----------------  ---------------  -----------------  ---------------------------
+  Python             3.9+             Language           All logic and analysis
+  Streamlit          >=1.28.0         Web Interface      Browser UI and file upload
+  Pillow (PIL)       >=9.0.0          Image Processing   Image I/O and ELA
+  OpenCV             >=4.7.0          Computer Vision    Gaussian high-pass filter
+  NumPy              >=1.23.0         Numerical          Array ops and statistics
+  hashlib            stdlib           Cryptography       SHA-256 integrity digest
+  UnivFD             CVPR 2023        AI Detector        Real vs. synthetic classifier
+  CLIP ViT-L/14      openai-clip 1.0  Vision Backbone    768-dim feature extraction
+  PyTorch            2.14.1+cpu       Deep Learning      Model loading and inference
+  json               stdlib           Reporting          JSON report serialization
+  uuid               stdlib           Reporting          Unique analysis ID (UUID4)
+  datetime           stdlib           Reporting          ISO 8601 UTC timestamp
+  ftfy / regex       >=6.0 / latest   Dependencies       CLIP tokenization support
+  tqdm               >=4.64           Dependencies       Progress display for CLIP
+  io / os / sys      stdlib           Utilities          File I/O and path handling
+
+
+15. DESIGN PRINCIPLES
+----------------------------------------------------------------------
+
+  Local processing:
+    All analysis runs on the user's machine. No image data is
+    transmitted to any external API or cloud service.
+
+  Graceful degradation:
+    If UnivFD is unavailable (missing checkpoint or dependencies),
+    the app continues to run ELA, high-frequency analysis, and
+    report generation. Each channel is completely independent.
+
+  Honest uncertainty:
+    When evidence is insufficient or conflicting, the system reports
+    INCONCLUSIVE rather than forcing a verdict. No scores from
+    different methods are combined into a probability without
+    validated calibration.
+
+  Reproducibility:
+    Each report records the analysis ID, UTC timestamp, exact method
+    parameters (ELA quality=90, amplify=15, blur_radius=2), SHA-256
+    digest, and detector checkpoint path. A second analyst can re-run
+    the identical procedure on the same file and obtain the same result.
+
+  Responsible use:
+    The platform explicitly states it is for research and educational
+    purposes only. It does not declare any individual guilty and
+    advises qualified expert forensic review for all consequential
+    decisions.
+
+
+16. FUTURE WORK (NOT YET IMPLEMENTED)
+----------------------------------------------------------------------
+
+  Video deepfake detection:
+    Would require frame-level analysis, temporal consistency checking,
+    and models such as FaceForensics++ or DFDC-trained networks.
+
+  Audio deepfake detection:
+    Would require spectrogram analysis and models such as RawNet2
+    or AASIST.
+
+  Calibrated probability output:
+    Converting logits to calibrated probabilities requires a held-out
+    calibration dataset and a method such as isotonic regression or
+    Platt scaling.
+
+  Detector ensemble:
+    Combining multiple independent AI detectors (e.g. CNNDetection,
+    GragnanielloNet) would improve robustness across image types.
+
+  Face localisation:
+    Detecting and isolating face regions before running the detector
+    could improve accuracy for face-swap deepfakes specifically.
+
+
+17. REFERENCES
+----------------------------------------------------------------------
+
+  Ojha, U., Li, Y., & Lee, Y. J. (2023).
+    Towards Universal Fake Image Detectors that Generalize Across
+    Generative Models. CVPR 2023.
+    https://github.com/Yuheng-Li/UniversalFakeDetect
+
+  Radford, A., Kim, J. W., Hallacy, C., et al. (2021).
+    Learning Transferable Visual Models From Natural Language
+    Supervision. ICML 2021.
+    https://arxiv.org/abs/2103.00020
+
+  Krawetz, N. (2007).
+    A Picture's Worth: Digital Image Analysis and Forensics.
+    Black Hat Briefings.
+
+  Rossler, A., Cozzolino, D., Verdoliva, L., et al. (2019).
+    FaceForensics++: Learning to Detect Manipulated Facial Images.
+    ICCV 2019.
+
+  PyTorch Documentation   : https://pytorch.org/docs/
+  Streamlit Documentation : https://docs.streamlit.io/
+  OpenCV Documentation    : https://docs.opencv.org/
+  Pillow Documentation    : https://pillow.readthedocs.io/
+  NumPy Documentation     : https://numpy.org/doc/
+
+
+======================================================================
+  Prepared for MSc Cybersecurity Competition
+  FAIR Prototype v1.0
+  All tools are free, open-source, and locally executed.
+======================================================================
