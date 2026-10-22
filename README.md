@@ -4,6 +4,7 @@
 > MSc Cybersecurity Competition Prototype
 
 ---
+Team Members - Nutan Rai , Yash Tiwari
 
 ## What FAIR Does
 
